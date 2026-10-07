@@ -77,7 +77,9 @@ class Position:
         """
         return {
             "payment_asset": stock_dividend.payment_asset,
-            "share_count": np.floor(self.amount * float(stock_dividend.ratio)),
+            # Truncate toward zero so a short does not owe an extra share.
+            # np.floor(-1.5) is -2.
+            "share_count": np.trunc(self.amount * float(stock_dividend.ratio)),
         }
 
     def handle_split(self, asset, ratio):
