@@ -2,6 +2,7 @@ import pandas as pd
 
 from zipline.assets import Equity, ExchangeInfo
 from zipline.finance.ledger import Ledger
+from zipline.finance.order import Order
 from zipline.finance.position import Position
 
 
@@ -52,3 +53,37 @@ def test_ledger_applies_negative_split_cash_for_shorts():
 
     assert ledger.position_tracker.positions[asset].amount == -33
     assert ledger.portfolio.cash == 100_000 - 30
+
+
+def test_partial_buy_split_scales_filled_shares():
+    asset = _asset()
+    order = Order(
+        dt=pd.Timestamp("2020-01-02", tz="UTC"),
+        asset=asset,
+        amount=100,
+    )
+    order.filled = 40
+
+    order.handle_split(0.5)  # 2-for-1
+
+    assert order.amount == 200
+    assert order.filled == 80
+    assert order.open_amount == 120
+    assert order.direction == 1
+
+
+def test_partial_short_reverse_split_scales_filled_shares():
+    asset = _asset()
+    order = Order(
+        dt=pd.Timestamp("2020-01-02", tz="UTC"),
+        asset=asset,
+        amount=-100,
+    )
+    order.filled = -40
+
+    order.handle_split(3)  # 1-for-3
+
+    assert order.amount == -33
+    assert order.filled == -13
+    assert order.open_amount == -20
+    assert order.direction == -1

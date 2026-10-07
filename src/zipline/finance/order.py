@@ -226,7 +226,11 @@ class Order:
         # new_share_amount = old_share_amount / ratio
         # new_price = old_price * ratio
 
+        # Scale shares already filled by the same ratio. Leaving `filled`
+        # unchanged makes a partially filled order trade the pre-split
+        # remainder again after the split.
         self.amount = int(self.amount / ratio)
+        self.filled = int(self.filled / ratio)
 
         if self.limit is not None:
             self.limit = round(self.limit * ratio, 2)
