@@ -99,8 +99,9 @@ class Position:
         # e.g., 33.333
         raw_share_count = self.amount / float(ratio)
 
-        # e.g., 33
-        full_share_count = np.floor(raw_share_count)
+        # Drop the fractional share toward zero. np.floor matches that for
+        # longs, but rounds shorts away from zero (-33.3 -> -34).
+        full_share_count = np.trunc(raw_share_count)
 
         # e.g., 0.333
         fractional_share_count = raw_share_count - full_share_count

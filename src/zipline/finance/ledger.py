@@ -501,7 +501,9 @@ class Ledger:
             A list of splits. Each split is a tuple of (asset, ratio).
         """
         leftover_cash = self.position_tracker.handle_splits(splits)
-        if leftover_cash > 0:
+        # Short positions produce a negative residual when the fractional
+        # share is closed out. Longs produce a positive residual.
+        if leftover_cash != 0:
             self._cash_flow(leftover_cash)
 
     def process_order(self, order):
