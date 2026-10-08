@@ -66,3 +66,60 @@ def test_stock_dividend_is_paid_once_and_dirties_position_stats():
     tracker.pay_dividends(pay_date)
     assert tracker.positions[asset].amount == 110
     assert tracker.stats.net_value == 1100
+
+
+class _PriceSource:
+    """Just enough of a DataPortal for ``sync_last_sale_prices``."""
+
+    def __init__(self, prices):
+        self.prices = prices
+
+    def get_scalar_asset_spot_value(self, asset, field, dt, data_frequency):
+        return self.prices[asset]
+
+
+def test_spin_off_stock_dividend_opens_position_and_dirties_position_stats():
+    """A stock dividend paid in another asset opens a new position.
+
+    The new position has no price until the next ``sync_last_sale_prices``,
+    so it is valued at 0.0 for that bar. The stats cache still has to be
+    recomputed so the new position shows up.
+    """
+    parent = _asset()
+    spin_off = Equity(2, exchange_info=ExchangeInfo("NYSE", "NYSE", "US"))
+    pay_date = pd.Timestamp("2020-01-06", tz="UTC")
+    tracker = PositionTracker("daily")
+    tracker.update_position(
+        parent,
+        amount=100,
+        last_sale_price=10.0,
+        cost_basis=10.0,
+    )
+    tracker.earn_dividends(
+        [],
+        [StockDividend(parent, spin_off, 0.15, pay_date)],
+    )
+    # Populate and clear the stats cache.
+    assert tracker.stats.net_value == 1000
+    assert tracker._dirty_stats is False
+
+    assert tracker.pay_dividends(pay_date) == 0.0
+
+    assert spin_off in tracker.positions
+    new_position = tracker.positions[spin_off]
+    assert new_position.amount == 15
+    assert new_position.last_sale_price == 0.0
+    assert tracker.positions[parent].amount == 100
+    assert pay_date not in tracker._unpaid_stock_dividends
+    assert tracker._dirty_stats is True
+
+    stats = tracker.stats
+    assert sorted(stats.position_exposure_series.index) == [1, 2]
+    # Unpriced until the next sync, so the new shares add nothing yet.
+    assert stats.net_value == 1000
+
+    tracker.sync_last_sale_prices(
+        pay_date,
+        _PriceSource({parent: 10.0, spin_off: 4.0}),
+    )
+    assert tracker.stats.net_value == 1000 + 15 * 4.0
