@@ -123,3 +123,29 @@ def test_spin_off_stock_dividend_opens_position_and_dirties_position_stats():
         _PriceSource({parent: 10.0, spin_off: 4.0}),
     )
     assert tracker.stats.net_value == 1000 + 15 * 4.0
+
+
+def test_stock_dividend_under_one_share_is_not_booked():
+    """0.15 x 1 short share truncates to -0.0. Nothing to pay, so no entry."""
+    parent = _asset()
+    spin_off = Equity(2, exchange_info=ExchangeInfo("NYSE", "NYSE", "US"))
+    pay_date = pd.Timestamp("2020-01-06", tz="UTC")
+    tracker = PositionTracker("daily")
+    tracker.update_position(
+        parent,
+        amount=-1,
+        last_sale_price=10.0,
+        cost_basis=10.0,
+    )
+
+    tracker.earn_dividends(
+        [],
+        [StockDividend(parent, spin_off, 0.15, pay_date)],
+    )
+
+    assert pay_date not in tracker._unpaid_stock_dividends
+    assert tracker.stats.net_value == -10
+    tracker.pay_dividends(pay_date)
+    assert spin_off not in tracker.positions
+    assert tracker._dirty_stats is False
+    assert tracker.positions[parent].amount == -1
